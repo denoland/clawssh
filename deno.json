@@ -1,6 +1,7 @@
 {
+  "unstable": ["raw-imports"],
   "tasks": {
-    "dev": "DENO_NO_PROMPT=1 deno run --allow-env --allow-run --allow-sys --allow-read --allow-write --allow-net --allow-ffi src/index.ts",
-    "install": "deno install --allow-env --allow-run --allow-sys --allow-read --allow-write --allow-net --allow-ffi --global --name clawssh src/index.ts"
+    "dev": "deno run -A src/index.ts",
+    "compile": "deno compile -A -o clawssh src/index.ts"
   }
 }

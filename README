@@ -1,7 +1,7 @@
 clawssh — run Claude Code on remote machines over SSH
 
 Full native TUI, zero installation on the remote. Just
-SSH access.
+SSH access. Also supports OpenCode via --opencode.
 
   $ clawssh dev@workstation.internal
   [clawssh] Connected — remote cwd: /home/dev
@@ -31,6 +31,9 @@ Injects a patch into Claude Code's Node.js runtime via
 NODE_OPTIONS=--require. The patch intercepts child_process
 and fs calls, routing tool operations through SSH to the
 remote machine. Claude's internal operations stay local.
+
+For OpenCode, installs a plugin that replaces built-in
+tools with SSH-backed versions. Pass --opencode to use.
 
 FEATURES
 
@@ -65,24 +68,22 @@ FEATURES
 
 USAGE
 
-  clawssh [SSH-FLAGS...] <USER@HOST> [CLAUDE-FLAGS...]
-
-SSH flags before the target, Claude flags after.
+  clawssh [--opencode] [SSH-FLAGS...] <USER@HOST> [AGENT-FLAGS...]
 
   clawssh dev@workstation.internal
-  clawssh -i ~/.ssh/key -p 2222 dev@server
-  clawssh -J jumpbox dev@internal --resume
-  clawssh -p 2222 dev@box --model opus -c
+  clawssh --opencode dev@server
+  clawssh -i ~/.ssh/key -p 2222 dev@server --resume
+  clawssh -J jumpbox dev@internal --model opus -c
 
 INSTALL
 
-  deno install -A --global --name clawssh src/index.ts
+  deno task compile
 
-Requires Deno and Node.js. Nothing needed on the remote.
+Produces a single binary. Requires Node.js on the local
+machine for Claude Code. Nothing needed on the remote.
 
 ENVIRONMENT
 
   CLAWSSH_CLAUDE_PATH   path to Claude cli.js
   CLAWSSH_NODE_PATH     path to node binary
   CLAWSSH_DEBUG=1       log intercepted tool calls
-  DENO_NO_PROMPT=1      suppress Deno permission prompts
