@@ -1,0 +1,106 @@
+clawssh — run Claude Code on remote machines over SSH
+
+Full native TUI, zero installation on the remote. Patches
+Claude Code's child_process.spawn via NODE_OPTIONS to route
+tool commands through an SSH tunnel.
+
+  $ clawssh root@192.168.1.10
+  [clawssh] Connected — remote cwd: /root
+  [clawssh] Using Claude Code from ~/.npm-packages/.../cli.js
+   ▐▛███▜▌   Claude Code v2.1.84
+  ▝▜█████▛▘  Opus 4.6 (1M context) · Claude Max
+    ▘▘ ▝▝    /root
+
+  ❯ what machine is this?
+
+  ⏺ Bash(uname -a)
+    ⎿  Linux prod-web-01 6.1.0 #1 SMP x86_64 GNU/Linux
+
+  ❯ read /etc/nginx/nginx.conf
+
+  ⏺ Read(/etc/nginx/nginx.conf)
+    ⎿  worker_processes auto;
+       events { worker_connections 1024; }
+       ...
+
+HOW IT WORKS
+
+  1. SSH connection — connects to the target, detects
+     remote home dir, sets up ControlMaster for connection
+     reuse with per-session random socket paths under
+     ~/.clawssh/sockets/ (mode 0700).
+
+  2. Spawn interception — patch.cjs is injected via
+     NODE_OPTIONS=--require into Claude Code and all its
+     worker threads. Intercepts child_process.spawn with
+     Object.defineProperty getters. Claude's Bash tool
+     wraps commands as zsh -c "... eval 'COMMAND' ...".
+     The patch extracts the eval'd command and runs it
+     via ssh target -- bash -c 'cd /remote && COMMAND'.
+
+  3. fs interception — readFile, writeFile, stat, readdir,
+     mkdir, realpath, unlink, rm all patched. Paths under
+     the remote cwd go through SSH. Everything else stays
+     local. Real stat values (size, mtime) from the remote.
+
+  4. Cleanup — shell-snapshot sourcing and cwd-tracking
+     stripped from commands before sending to remote.
+     SSH absorbs SIGTERM on cancel, so the patch tracks
+     kill signals and reports them as signal-based exit
+     so Claude shows "Cancelled" properly.
+
+Claude's internal operations (security, which, git, npm,
+codesign, ripgrep) all stay local. Only tool-dispatched
+commands go remote.
+
+USAGE
+
+  clawssh [SSH-FLAGS...] <USER@HOST> [CLAUDE-FLAGS...]
+
+SSH flags go before the target, Claude flags go after.
+
+  clawssh root@192.168.1.10
+  clawssh -i ~/.ssh/key -p 2222 dev@server
+  clawssh -J jumpbox root@internal --resume
+  clawssh -p 2222 dev@box --model opus -c
+
+INSTALL
+
+  deno install -A --global --name clawssh src/index.ts
+
+Requires Deno and Node.js (for Claude Code's cli.js).
+The remote machine needs nothing — just an SSH server.
+
+ENVIRONMENT
+
+  CLAWSSH_CLAUDE_PATH   override path to Claude cli.js
+  CLAWSSH_NODE_PATH     override path to node binary
+  CLAWSSH_DEBUG=1       log intercepted tool calls
+  DENO_NO_PROMPT=1      suppress Deno permission prompts
+
+WHAT RUNS WHERE
+
+  Remote (via SSH):
+    Bash tool commands — ls, cat, grep, find, systemctl,
+    docker ps, nginx -t, anything Claude decides to run.
+    File tool operations — Read, Write, Edit on paths
+    under the remote working directory.
+
+  Local (passthrough):
+    Claude internals — security (keychain), which, git,
+    npm, gh, codesign, ps, ripgrep. Auth, config, session
+    files, temp task output.
+
+HARDENING
+
+  - Per-session random socket path in ~/.clawssh/sockets/
+    with mode 0700 (no predictable /tmp paths)
+  - Null byte stripping and control character rejection
+    on all paths before shell quoting
+  - 30s timeout on all SSH operations with single retry
+    on transient failures (connection reset, broken pipe)
+  - Real stat values (size, mtime) from remote, not fakes
+  - fs routing by allowlist (only remoteCwd subtree goes
+    remote) not denylist
+  - ssh -O exit on SIGINT and normal exit to prevent
+    stale socket password prompts
