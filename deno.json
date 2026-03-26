@@ -1,0 +1,6 @@
+{
+  "tasks": {
+    "dev": "deno run -A src/index.ts",
+    "install": "deno install -A --global --name clawssh src/index.ts"
+  }
+}
