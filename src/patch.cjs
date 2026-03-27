@@ -386,6 +386,44 @@ Object.defineProperty(childProcess, "spawnSync", {
   configurable: true,
 });
 
-process.cwd = function () {
-  return remoteCwd;
+// Override cwd to remote path. Create a local temp dir as the real cwd
+// so Node doesn't hang when the remote path doesn't exist locally (e.g. /root on macOS).
+const _fs = require("fs");
+const _os = require("os");
+const shadowDir = _fs.mkdtempSync(path.join(_os.tmpdir(), "clawssh-"));
+try { process.chdir(shadowDir); } catch {}
+process.cwd = function () { return remoteCwd; };
+
+// Make stat/access/realpath/exists return valid results for remoteCwd itself,
+// even before toolActive. Otherwise Claude thinks the cwd doesn't exist.
+const _cwdStat = {
+  size: 0, mode: 0o40755, mtimeMs: Date.now(), dev: 0, ino: 0, nlink: 1,
+  uid: 0, gid: 0, rdev: 0, blksize: 4096, blocks: 0, atimeMs: Date.now(),
+  ctimeMs: Date.now(), birthtimeMs: Date.now(),
+  isFile: () => false, isDirectory: () => true,
+  isSymbolicLink: () => false, isBlockDevice: () => false,
+  isCharacterDevice: () => false, isFIFO: () => false, isSocket: () => false,
 };
+function isCwd(p) { return typeof p === "string" && (p === remoteCwd || p === remoteCwd + "/"); }
+
+// Wrap the already-patched fs methods to handle remoteCwd during startup
+const _statSync = fs.statSync;
+Object.defineProperty(fs, "statSync", { get() { return function(p, o) { if (isCwd(p)) return _cwdStat; return _statSync.call(fs, p, o); }; }, set() {}, configurable: true });
+const _lstatSync = fs.lstatSync;
+Object.defineProperty(fs, "lstatSync", { get() { return function(p, o) { if (isCwd(p)) return _cwdStat; return _lstatSync.call(fs, p, o); }; }, set() {}, configurable: true });
+const _accessSync = fs.accessSync;
+Object.defineProperty(fs, "accessSync", { get() { return function(p, m) { if (isCwd(p)) return; return _accessSync.call(fs, p, m); }; }, set() {}, configurable: true });
+const _existsSync = fs.existsSync;
+Object.defineProperty(fs, "existsSync", { get() { return function(p) { if (isCwd(p)) return true; return _existsSync.call(fs, p); }; }, set() {}, configurable: true });
+const _realpathSync = fs.realpathSync;
+const _rpWrapper = function(p, o) { if (isCwd(p)) return remoteCwd; return _realpathSync.call(fs, p, o); };
+if (_realpathSync.native) _rpWrapper.native = function(p, o) { if (isCwd(p)) return remoteCwd; return _realpathSync.native.call(fs, p, o); };
+Object.defineProperty(fs, "realpathSync", { get() { return _rpWrapper; }, set() {}, configurable: true });
+
+// Same for async/promises
+const _fspStat = fsp.stat;
+fsp.stat = async function(p, o) { if (isCwd(p)) return _cwdStat; return _fspStat.call(fsp, p, o); };
+const _fspAccess = fsp.access;
+fsp.access = async function(p, m) { if (isCwd(p)) return; return _fspAccess.call(fsp, p, m); };
+const _fspRealpath = fsp.realpath;
+fsp.realpath = async function(p, o) { if (isCwd(p)) return remoteCwd; return _fspRealpath.call(fsp, p, o); };
