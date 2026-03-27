@@ -9,6 +9,37 @@ const SSH_FLAGS_WITH_ARG = new Set([
   "-L", "-l", "-m", "-O", "-o", "-p", "-Q", "-R", "-S", "-W", "-w",
 ]);
 
+const REPO = "denoland/clawssh";
+const TESTED_CC_VERSION = "2.1.84";
+
+if (Deno.args[0] === "upgrade") {
+  const tag = Deno.args[1] ?? "latest";
+  const os = Deno.build.os === "darwin" ? "macos" : "linux";
+  const arch = Deno.build.arch === "aarch64" ? "arm64" : "x64";
+  const binary = `clawssh-${os}-${arch}`;
+
+  let url: string;
+  if (tag === "latest") {
+    url = `https://github.com/${REPO}/releases/latest/download/${binary}`;
+  } else {
+    const v = tag.startsWith("v") ? tag : `v${tag}`;
+    url = `https://github.com/${REPO}/releases/download/${v}/${binary}`;
+  }
+
+  console.error(`Downloading ${tag === "latest" ? "latest" : tag}...`);
+  const resp = await fetch(url);
+  if (!resp.ok) {
+    console.error(`Failed to download: ${resp.status} ${resp.statusText}`);
+    Deno.exit(1);
+  }
+
+  const self = Deno.execPath();
+  const data = new Uint8Array(await resp.arrayBuffer());
+  await Deno.writeFile(self, data, { mode: 0o755 });
+  console.error(`Updated ${self}`);
+  Deno.exit(0);
+}
+
 const rawArgs = Deno.args;
 const userSshFlags: string[] = [];
 let target: string | null = null;
@@ -45,6 +76,9 @@ if (!target) {
   console.error("  clawssh --opencode dev@server");
   console.error("  clawssh -i ~/.ssh/key -p 2222 dev@server --resume");
   console.error("  clawssh -J jumpbox root@internal --model opus");
+  console.error("");
+  console.error("  clawssh upgrade          # upgrade to latest");
+  console.error("  clawssh upgrade v0.2.0   # upgrade to specific version");
   Deno.exit(1);
 }
 
@@ -113,9 +147,24 @@ if (!cwdResult.success) {
 const remoteCwd = new TextDecoder().decode(cwdResult.stdout).trim();
 console.error(`${DIM}[clawssh] Connected — remote cwd: ${remoteCwd}${RESET}`);
 
+const YELLOW = "\x1b[33m";
+
+async function checkClaudeVersion(cliPath: string) {
+  try {
+    const pkgPath = join(dirname(cliPath), "package.json");
+    const pkg = JSON.parse(await Deno.readTextFile(pkgPath));
+    const version: string = pkg.version;
+    if (version.split(".").slice(0, 2).join(".") !== TESTED_CC_VERSION.split(".").slice(0, 2).join(".")) {
+      console.error(`${YELLOW}[clawssh] Warning: Claude Code ${version} detected, tested with ${TESTED_CC_VERSION}`);
+      console.error(`[clawssh] If you hit issues, run: npm install -g @anthropic-ai/claude-code@${TESTED_CC_VERSION}${RESET}`);
+    }
+  } catch { /* */ }
+}
+
 async function launchClaude(): Promise<Deno.ChildProcess> {
   const cliPath = await findClaudeCliJs();
   const nodePath = await findNode();
+  await checkClaudeVersion(cliPath);
   console.error(`${DIM}[clawssh] Using Claude Code from ${cliPath}${RESET}`);
 
   const patchPath = join(dirname(fromFileUrl(import.meta.url)), "patch.cjs");
