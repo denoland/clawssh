@@ -11,9 +11,9 @@ const SSH_TIMEOUT = 30_000;
 const EVAL_CMD_RE = /eval\s+'((?:[^'\\]|'\\'')*?)'\s*\\?/;
 const CTRL_CHAR_RE = /[\x00-\x1f\x7f]/;
 
-const childProcess = require("node:child_process");
-const fs = require("node:fs");
-const path = require("node:path");
+const childProcess = require("child_process");
+const fs = require("fs");
+const path = require("path");
 
 const debug = !!process.env.CLAWSSH_DEBUG;
 
@@ -44,8 +44,14 @@ function validatePath(p) {
   }
 }
 
+let toolActive = false;
+const RUNTIME_LOCAL_RE =
+  /\/\.claude|node_modules|\/(?:private\/)?tmp\/claude-\d+/;
+
 function isRemote(p) {
+  if (!toolActive) return false;
   if (!p || typeof p !== "string") return false;
+  if (RUNTIME_LOCAL_RE.test(p)) return false;
   if (path.isAbsolute(p)) {
     return p === remoteCwd || p.startsWith(remoteCwd + "/");
   }
@@ -308,6 +314,10 @@ function route(command, spawnArgs) {
       const m = shellCmd.match(EVAL_CMD_RE);
       if (m) {
         const actual = m[1].replace(/'\\'''/g, "'");
+        if (!toolActive) {
+          toolActive = true;
+          log("gate", "fs routing enabled");
+        }
         log("tool", actual.slice(0, 100));
         return wrap(actual);
       }
@@ -375,3 +385,7 @@ Object.defineProperty(childProcess, "spawnSync", {
   set() {},
   configurable: true,
 });
+
+process.cwd = function () {
+  return remoteCwd;
+};
