@@ -70,6 +70,9 @@ const SSH_OPTS = [
 ];
 
 const DIM = "\x1b[90m";
+const BOLD = "\x1b[1m";
+const YELLOW = "\x1b[33m";
+const CYAN = "\x1b[36m";
 const RESET = "\x1b[0m";
 
 function killSocket() {
@@ -137,21 +140,16 @@ async function launchClaude(): Promise<Deno.ChildProcess> {
   }).spawn();
 }
 
-async function findClaudeCliJs(): Promise<string> {
-  const envPath = Deno.env.get("CLAWSSH_CLAUDE_PATH");
-  if (envPath) return envPath;
-  for (
-    const p of [
-      `${home}/.npm-packages/lib/node_modules/@anthropic-ai/claude-code/cli.js`,
-      `/usr/local/lib/node_modules/@anthropic-ai/claude-code/cli.js`,
-      `/opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/cli.js`,
-    ]
-  ) {
-    try {
-      await Deno.stat(p);
-      return p;
-    } catch { /* */ }
+async function fileExists(p: string): Promise<boolean> {
+  try {
+    await Deno.stat(p);
+    return true;
+  } catch {
+    return false;
   }
+}
+
+async function getNpmGlobalCliPath(): Promise<string | null> {
   try {
     const out = await new Deno.Command("npm", {
       args: ["root", "-g"],
@@ -162,15 +160,57 @@ async function findClaudeCliJs(): Promise<string> {
       const p = `${
         new TextDecoder().decode(out.stdout).trim()
       }/@anthropic-ai/claude-code/cli.js`;
-      try {
-        await Deno.stat(p);
-        return p;
-      } catch { /* */ }
+      if (await fileExists(p)) return p;
     }
   } catch { /* */ }
-  console.error("[clawssh] Could not find Claude Code cli.js");
+  return null;
+}
+
+async function findClaudeCliJs(): Promise<string> {
+  const envPath = Deno.env.get("CLAWSSH_CLAUDE_PATH");
+  if (envPath) return envPath;
+
+  const npmPath = await getNpmGlobalCliPath();
+  if (npmPath) return npmPath;
+
+  for (
+    const p of [
+      `${home}/.npm-packages/lib/node_modules/@anthropic-ai/claude-code/cli.js`,
+      `/usr/local/lib/node_modules/@anthropic-ai/claude-code/cli.js`,
+    ]
+  ) {
+    if (await fileExists(p)) return p;
+  }
+
+  // No compatible installation found — auto-install via npm
   console.error(
-    "Set CLAWSSH_CLAUDE_PATH or: npm install -g @anthropic-ai/claude-code",
+    `${BOLD}${YELLOW}[clawssh] No compatible Claude Code installation found${RESET}`,
+  );
+  console.error(
+    `${DIM}clawssh requires the npm installation (Homebrew/Deno/native builds are not compatible)${RESET}`,
+  );
+  console.error(`\nInstalling via npm...`);
+  try {
+    const install = await new Deno.Command("npm", {
+      args: ["install", "-g", "@anthropic-ai/claude-code"],
+      stdin: "inherit",
+      stdout: "inherit",
+      stderr: "inherit",
+    }).output();
+    if (install.success) {
+      const installed = await getNpmGlobalCliPath();
+      if (installed) {
+        console.error(`${DIM}[clawssh] Installed successfully${RESET}\n`);
+        return installed;
+      }
+    }
+  } catch { /* */ }
+  console.error(
+    `\n${BOLD}${YELLOW}npm install failed.${RESET} Install manually:\n`,
+  );
+  console.error(`  ${CYAN}npm install -g @anthropic-ai/claude-code${RESET}\n`);
+  console.error(
+    `Or set ${BOLD}CLAWSSH_CLAUDE_PATH${RESET} to the path of cli.js manually.`,
   );
   Deno.exit(1);
 }
@@ -185,10 +225,7 @@ async function findNode(): Promise<string> {
       "/usr/bin/node",
     ]
   ) {
-    try {
-      await Deno.stat(p);
-      return p;
-    } catch { /* */ }
+    if (await fileExists(p)) return p;
   }
   try {
     if (
