@@ -36,8 +36,11 @@ jobs:
 
       - name: Setup SSH to localhost
         run: |
-          # Generate a key with no passphrase
-          ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N "" -q
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+          # Generate a key with no passphrase (skip if exists)
+          [ -f ~/.ssh/id_ed25519 ] || ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N "" -q
           cat ~/.ssh/id_ed25519.pub >> ~/.ssh/authorized_keys
           chmod 600 ~/.ssh/authorized_keys
 
@@ -46,14 +49,16 @@ jobs:
             sudo systemctl start ssh || sudo service ssh start
           fi
 
-          # macOS: enable Remote Login
+          # macOS: enable Remote Login (ignore if already on)
           if [ "$(uname)" = "Darwin" ]; then
-            sudo systemsetup -setremotelogin on
+            sudo systemsetup -setremotelogin on 2>/dev/null || true
           fi
 
           # Accept localhost host key
           ssh-keyscan -H localhost >> ~/.ssh/known_hosts 2>/dev/null
-          ssh localhost true
+
+          # Verify
+          ssh -o BatchMode=yes localhost true
 
       - name: Run SSH routing test
         run: bash test/test-ssh-routing.sh
