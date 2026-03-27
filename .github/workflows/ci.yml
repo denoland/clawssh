@@ -18,3 +18,42 @@ jobs:
 
       - run: deno check src/index.ts
       - run: node -c src/patch.cjs
+
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Setup SSH to localhost
+        run: |
+          # Generate a key with no passphrase
+          ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N "" -q
+          cat ~/.ssh/id_ed25519.pub >> ~/.ssh/authorized_keys
+          chmod 600 ~/.ssh/authorized_keys
+
+          # Linux: start sshd
+          if [ "$(uname)" = "Linux" ]; then
+            sudo systemctl start ssh || sudo service ssh start
+          fi
+
+          # macOS: enable Remote Login
+          if [ "$(uname)" = "Darwin" ]; then
+            sudo systemsetup -setremotelogin on
+          fi
+
+          # Accept localhost host key
+          ssh-keyscan -H localhost >> ~/.ssh/known_hosts 2>/dev/null
+          ssh localhost true
+
+      - name: Run SSH routing test
+        run: bash test/test-ssh-routing.sh
