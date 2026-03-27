@@ -149,66 +149,41 @@ async function fileExists(p: string): Promise<boolean> {
   }
 }
 
-async function getNpmGlobalCliPath(): Promise<string | null> {
-  try {
-    const out = await new Deno.Command("npm", {
-      args: ["root", "-g"],
-      stdout: "piped",
-      stderr: "null",
-    }).output();
-    if (out.success) {
-      const p = `${
-        new TextDecoder().decode(out.stdout).trim()
-      }/@anthropic-ai/claude-code/cli.js`;
-      if (await fileExists(p)) return p;
-    }
-  } catch { /* */ }
-  return null;
-}
+const CLAWSSH_PREFIX = `${home}/.clawssh`;
+const CLAWSSH_CLI_PATH =
+  `${CLAWSSH_PREFIX}/node_modules/@anthropic-ai/claude-code/cli.js`;
 
 async function findClaudeCliJs(): Promise<string> {
   const envPath = Deno.env.get("CLAWSSH_CLAUDE_PATH");
   if (envPath) return envPath;
 
-  const npmPath = await getNpmGlobalCliPath();
-  if (npmPath) return npmPath;
+  if (await fileExists(CLAWSSH_CLI_PATH)) return CLAWSSH_CLI_PATH;
 
-  for (
-    const p of [
-      `${home}/.npm-packages/lib/node_modules/@anthropic-ai/claude-code/cli.js`,
-      `/usr/local/lib/node_modules/@anthropic-ai/claude-code/cli.js`,
-    ]
-  ) {
-    if (await fileExists(p)) return p;
-  }
-
-  // No compatible installation found — auto-install via npm
+  // Auto-install to ~/.clawssh
   console.error(
-    `${BOLD}${YELLOW}[clawssh] No compatible Claude Code installation found${RESET}`,
+    `${BOLD}${YELLOW}[clawssh] Claude Code not found — installing to ~/.clawssh${RESET}`,
   );
-  console.error(
-    `${DIM}clawssh requires the npm installation (Homebrew/Deno/native builds are not compatible)${RESET}`,
-  );
-  console.error(`\nInstalling via npm...`);
   try {
+    await Deno.mkdir(CLAWSSH_PREFIX, { recursive: true });
     const install = await new Deno.Command("npm", {
-      args: ["install", "-g", "@anthropic-ai/claude-code"],
+      args: [
+        "install",
+        "--prefix",
+        CLAWSSH_PREFIX,
+        "@anthropic-ai/claude-code",
+      ],
       stdin: "inherit",
       stdout: "inherit",
       stderr: "inherit",
     }).output();
-    if (install.success) {
-      const installed = await getNpmGlobalCliPath();
-      if (installed) {
-        console.error(`${DIM}[clawssh] Installed successfully${RESET}\n`);
-        return installed;
-      }
+    if (install.success && await fileExists(CLAWSSH_CLI_PATH)) {
+      console.error(`${DIM}[clawssh] Installed successfully${RESET}\n`);
+      return CLAWSSH_CLI_PATH;
     }
   } catch { /* */ }
   console.error(
-    `\n${BOLD}${YELLOW}npm install failed.${RESET} Install manually:\n`,
+    `\n${BOLD}${YELLOW}Installation failed.${RESET} Make sure npm is installed and try again.\n`,
   );
-  console.error(`  ${CYAN}npm install -g @anthropic-ai/claude-code${RESET}\n`);
   console.error(
     `Or set ${BOLD}CLAWSSH_CLAUDE_PATH${RESET} to the path of cli.js manually.`,
   );
