@@ -84,19 +84,33 @@ function killSocket() {
 
 console.error(`${DIM}[clawssh] Connecting to ${target}...${RESET}`);
 
-const sshResult = await new Deno.Command("ssh", {
+// Two-step: first establish connection (interactive, can prompt for password),
+// then get the remote cwd over the now-authenticated ControlMaster socket.
+const sshAuth = new Deno.Command("ssh", {
+  args: [...SSH_OPTS, target, "true"],
+  stdin: "inherit",
+  stdout: "inherit",
+  stderr: "inherit",
+}).spawn();
+
+if (!(await sshAuth.status).success) {
+  console.error(`[clawssh] Failed to connect to ${target}`);
+  Deno.exit(1);
+}
+
+// ControlMaster is now established — no more password prompts
+const cwdResult = await new Deno.Command("ssh", {
   args: [...SSH_OPTS, target, "--", "pwd"],
   stdout: "piped",
   stderr: "piped",
 }).output();
 
-if (!sshResult.success) {
-  console.error(`[clawssh] Failed to connect to ${target}`);
-  console.error(new TextDecoder().decode(sshResult.stderr));
+if (!cwdResult.success) {
+  console.error(`[clawssh] Failed to get remote cwd`);
   Deno.exit(1);
 }
 
-const remoteCwd = new TextDecoder().decode(sshResult.stdout).trim();
+const remoteCwd = new TextDecoder().decode(cwdResult.stdout).trim();
 console.error(`${DIM}[clawssh] Connected — remote cwd: ${remoteCwd}${RESET}`);
 
 async function launchClaude(): Promise<Deno.ChildProcess> {
