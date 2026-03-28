@@ -150,8 +150,6 @@ if (!cwdResult.success) {
 const remoteCwd = new TextDecoder().decode(cwdResult.stdout).trim();
 console.error(`${DIM}[clawssh] Connected — remote cwd: ${remoteCwd}${RESET}`);
 
-const YELLOW = "\x1b[33m";
-
 async function checkClaudeVersion(cliPath: string) {
   try {
     const pkgPath = join(dirname(cliPath), "package.json");
