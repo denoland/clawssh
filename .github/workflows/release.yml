@@ -61,4 +61,3 @@ jobs:
             clawssh-macos-x64 \
             clawssh-macos-arm64 \
             checksums.txt
-

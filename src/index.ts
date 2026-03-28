@@ -157,9 +157,16 @@ async function checkClaudeVersion(cliPath: string) {
     const pkgPath = join(dirname(cliPath), "package.json");
     const pkg = JSON.parse(await Deno.readTextFile(pkgPath));
     const version: string = pkg.version;
-    if (version.split(".").slice(0, 2).join(".") !== TESTED_CC_VERSION.split(".").slice(0, 2).join(".")) {
-      console.error(`${YELLOW}[clawssh] Warning: Claude Code ${version} detected, tested with ${TESTED_CC_VERSION}`);
-      console.error(`[clawssh] If you hit issues, run: npm install -g @anthropic-ai/claude-code@${TESTED_CC_VERSION}${RESET}`);
+    if (
+      version.split(".").slice(0, 2).join(".") !==
+        TESTED_CC_VERSION.split(".").slice(0, 2).join(".")
+    ) {
+      console.error(
+        `${YELLOW}[clawssh] Warning: Claude Code ${version} detected, tested with ${TESTED_CC_VERSION}`,
+      );
+      console.error(
+        `[clawssh] If you hit issues, run: npm install -g @anthropic-ai/claude-code@${TESTED_CC_VERSION}${RESET}`,
+      );
     }
   } catch { /* */ }
 }
