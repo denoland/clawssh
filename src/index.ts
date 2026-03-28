@@ -2,6 +2,7 @@
 
 import { dirname, fromFileUrl, join } from "jsr:@std/path";
 import OPENCODE_PLUGIN from "./opencode-plugin.ts" with { type: "text" };
+import PATCH_CJS from "./patch.cjs" with { type: "text" };
 
 // deno-fmt-ignore
 const SSH_FLAGS_WITH_ARG = new Set([
@@ -175,7 +176,8 @@ async function launchClaude(): Promise<Deno.ChildProcess> {
   await checkClaudeVersion(cliPath);
   console.error(`${DIM}[clawssh] Using Claude Code from ${cliPath}${RESET}`);
 
-  const patchPath = join(dirname(fromFileUrl(import.meta.url)), "patch.cjs");
+  const patchPath = join(Deno.makeTempDirSync(), "patch.cjs");
+  await Deno.writeTextFile(patchPath, PATCH_CJS);
   const existingNodeOpts = Deno.env.get("NODE_OPTIONS") ?? "";
 
   return new Deno.Command(nodePath, {

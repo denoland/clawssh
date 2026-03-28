@@ -77,7 +77,7 @@ USAGE
 
 INSTALL
 
-  curl -fsSL https://clawssh.dev/install.sh | sh
+  curl -fsSL https://denoland.github.io/clawssh/install.sh | sh
 
   Or build from source:
 
