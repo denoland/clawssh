@@ -3,27 +3,22 @@ clawssh — run Claude Code on remote machines over SSH
 Full native TUI, zero installation on the remote. Just
 SSH access. Also supports OpenCode via --opencode.
 
-  $ clawssh dev@workstation.internal
-  [clawssh] Connected — remote cwd: /home/dev
+  $ clawssh root@api-pod-7f8d4
+  [clawssh] Connected — remote cwd: /app
    ▐▛███▜▌   Claude Code v2.1.84
   ▝▜█████▛▘  Opus 4.6 (1M context) · Claude Max
-    ▘▘ ▝▝    ~/project
+    ▘▘ ▝▝    /app
 
-  ❯ run the test suite
+  ❯ /healthz is returning 503, debug it
 
-  ⏺ Bash(cd ~/project && cargo test)
-    ⎿  running 42 tests
-       test core::parse ... ok
-       test core::eval ... ok
-       ...
-       test result: ok. 42 passed; 0 failed
+  ⏺ Bash(curl -s localhost:8080/healthz)
+    ⎿  {"status":"error","detail":"redis connection refused"}
 
-  ❯ read src/main.rs
+  ⏺ Edit(src/config.ts)
+    ⎿  Changed REDIS_HOST fallback: localhost → redis-svc
 
-  ⏺ Read(src/main.rs)
-    ⎿  use std::io;
-       fn main() -> io::Result<()> {
-       ...
+  ⏺ Bash(curl -s localhost:8080/healthz)
+    ⎿  {"status":"ok"}
 
 HOW IT WORKS
 
