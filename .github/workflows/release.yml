@@ -1,0 +1,64 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            artifact: clawssh-linux-x64
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            artifact: clawssh-linux-arm64
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            artifact: clawssh-macos-x64
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            artifact: clawssh-macos-arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+
+      - name: Compile
+        run: deno compile -A --target ${{ matrix.target }} -o ${{ matrix.artifact }} src/index.ts
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          chmod +x clawssh-*
+          sha256sum clawssh-* > checksums.txt
+          gh release create "$TAG" \
+            --repo "${{ github.repository }}" \
+            --title "$TAG" \
+            --generate-notes \
+            clawssh-linux-x64 \
+            clawssh-linux-arm64 \
+            clawssh-macos-x64 \
+            clawssh-macos-arm64 \
+            checksums.txt
+

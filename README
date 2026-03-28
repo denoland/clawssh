@@ -77,10 +77,14 @@ USAGE
 
 INSTALL
 
-  deno task compile
+  curl -fsSL https://clawssh.dev/install.sh | sh
 
-Produces a single binary. Requires Node.js on the local
-machine for Claude Code. Nothing needed on the remote.
+  Or build from source:
+
+    deno task compile
+
+Requires Claude Code and Node.js on the local machine.
+Nothing needed on the remote.
 
 ENVIRONMENT
 
